@@ -11,7 +11,7 @@ def fix_atom_numbering(pdb_lines):
     output_lines = []
     for i, line in enumerate(pdb_lines):
         line_obj = PDBLINE.from_line(line)
-        line_obj['atomid'] = i
+        line_obj['atomid'] = i + 1
         output_lines.append(line_obj.get_line())
     return output_lines
 
@@ -36,7 +36,7 @@ def fix_residue_numbering(pdb_lines):
     return output_lines
 
 
-def change_positions(pdb_lines, positions, idx_start=0, idx_end=int(1e99)):
+def write_positions(pdb_lines, positions, idx_start=0, idx_end='inf'):
     """ Write new positions into a pdb file.
     Arguments
         pdblines (list of str): List containing the pdb lines to be changed.
@@ -46,8 +46,10 @@ def change_positions(pdb_lines, positions, idx_start=0, idx_end=int(1e99)):
         idx_end (int): Index where to end changing pos in lines, 0-based
             default: int(1e99); exclusive
     """
+    if idx_end == 'inf':
+        idx_end = len(lines)
     output_lines = pdb_lines[ : idx_start]
-    assert (idx_end - idx_start - 1, 3) == positions.shape
+    assert (idx_end - idx_start, 3) == positions.shape
     for line, pos in zip(pdb_lines[idx_start : idx_end], positions):
         line_obj = PDBLINE.from_line(line)
         # I actually do not know what the pdb standart does with positions > 100
