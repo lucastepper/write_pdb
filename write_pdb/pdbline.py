@@ -2,13 +2,16 @@ class PDBLINE(dict):
     """
     Create a single PDB line and write its fields.
     """
-    def __init__(self, **kwargs):
+    def __init__(self, input_line, **kwargs):
         super().__init__()
+        self.input_line = input_line
+        # keep track if the line is an ATOM or HETATM
+        self.is_atom = True
         # should actually make field_templates private Standart pdb
         # definition, changed to make it zero based and compatible
         # with python indexing by subtracting one from the left index
         self.field_templates = {
-            'type':        ([0, 4],     '“ATOM”',		                     'character'),
+            'type':        ([0, 6],     '“ATOM”',		                     'character'),
             'atomid':      ([6, 11],	'Atom serial number	right',	         'integer'),
             'atomname':    ([12, 16],	'Atom name	left',	                 'character'),
             'altlocid':    ([16, 17],   'Alternate location indicator',	     'character'),
@@ -30,9 +33,19 @@ class PDBLINE(dict):
     @staticmethod
     def from_line(pdb_line):
         """ Construct a PDBLINE obj from a full pdb line given as a str. """
+        # if not a proper atom line, mark and return
+        if pdb_line[ : 4].strip() not in ['ATOM', 'HETATM']:
+            # since I do not fix numbering on TER lines jet, just erase it
+            if pdb_line.startswith('TER'):
+                pdb_line = 'TER\n'
+            to_construct = PDBLINE(pdb_line)
+            to_construct.is_atom = False
+            return to_construct
+        # pad or cut line to len 79
         if len(pdb_line) < 79:
-            pdb_line += ' ' * (79 * len(pdb_line))
-        to_construct = PDBLINE()
+            pdb_line += ' ' * (79 - len(pdb_line))
+        pdb_line = pdb_line[  : 79]
+        to_construct = PDBLINE(pdb_line)
         for key, field_descriptor in to_construct.field_templates.items():
             idx_start, idx_end = field_descriptor[0]
             to_construct[key] = pdb_line[idx_start : idx_end]
@@ -64,14 +77,17 @@ class PDBLINE(dict):
         for i, idx in enumerate(range(idx1, idx2)):
             line[idx] = word[i]
 
-    def get_line(self):
-        """ Write all fields into a line, empty fields end up as spaces. """
+    def get_line(self, pad_with=' \n'):
+        """ Write all fields into a line, empty fields end up as spaces.
+        If the line is not of type ATOM or HETATOM, return unmodified line. """
+        if not self.is_atom:
+            return self.input_line
         line = 79 * [' ']
         for key, (colums, __, __) in self.field_templates.items():
             if key in super().keys():
                 word = self.get_str_with_len(super().__getitem__(key), colums[1] - colums[0])
                 self.sub_line(colums[0], colums[1], word, line)
-        return ''.join(line) + '\n'
+        return ''.join(line) + pad_with
 
     def __repr__(self):
         return self.get_line().strip('\n')
