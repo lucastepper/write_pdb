@@ -2,16 +2,47 @@ import string
 from write_pdb.pdbline import PDBLINE
 
 
-def fix_atom_numbering(pdb_lines):
+class IsNewChain():
+    """ Small class to check if given PDBLine object is the
+    same or different chain to the last one passed, based on chainid
+    If not PDBLine.is_atom, returns False
+    If the first PDBLine that is_atom is passed, returns return_val_first_call. """
+
+    def __init__(self, return_val_first_call=True):
+        self.chainid = None
+        self.return_val_first_call = return_val_first_call
+
+    def clear(self):
+        self.chainid = None
+
+    def __call__(self, pdb_line):
+        if not pdb_line.is_atom:
+            return False
+        if self.chainid != pdb_line['chainid']:
+            self.chainid = pdb_line['chainid']
+            return self.return_val_first_call
+        return False
+
+
+def fix_atom_numbering(pdb_lines, restart_atomid_per_chain=True):
     """ Check that the atom numbering is increasing by one each line,
     given a list of pdb lines. Returns a bopy of pdb_lines.
     Arguments:
         pdblines (list of str): List containing the pdb lines to be changed.
+        restart_atomid_per_chain (bool): Restart the atom numbering at 1 when a
+            new chain begins or number starting at the beginning of the file to the end
+            default: True
     """
     output_lines = []
-    for i, line in enumerate(pdb_lines):
+    atom_counter = 1
+    is_new_chain = IsNewChain(return_val_first_call=False)
+    for line in pdb_lines:
         line_obj = PDBLINE.from_line(line)
-        line_obj['atomid'] = i + 1
+        if restart_atomid_per_chain and is_new_chain(line_obj):
+            atom_counter = 1
+        if line_obj.is_atom:
+            line_obj['atomid'] = atom_counter
+            atom_counter += 1
         output_lines.append(line_obj.get_line())
     return output_lines
 
@@ -24,9 +55,18 @@ def fix_residue_numbering(pdb_lines):
     """
     output_lines = []
     res_counter = 1
-    resname_cache = PDBLINE.from_line(pdb_lines[0])['resname']
+    # store the name of resiude we are iterating over right now
+    # to detect when it changes
+    resname_cache = None
     for line in pdb_lines:
         line_obj = PDBLINE.from_line(line)
+        # ignore REMARK TER and other such lines
+        if not line_obj.is_atom:
+            continue
+        # set cache the first time a line belonging to residue is encountered
+        if resname_cache is None:
+            resname_cache = PDBLINE.from_line(line)['resname']
+            continue
         # check if a new residue has started, count the number of residues
         if line_obj['resname'] != resname_cache:
             res_counter += 1
@@ -61,17 +101,47 @@ def write_positions(pdb_lines, positions, idx_start=0, idx_end='inf'):
     return output_lines
 
 
+class IsNewResidue():
+    """ Small class to check if given PDBLine object is the
+    same or different residue to the last one passed.
+    Res is different when either resid or resname changes
+    If not PDBLine.is_atom, returns False
+    If the first PDBLine that is_atom is passed, returns True. """
+
+    def __init__(self):
+        """ Init in empty state, set the first pdb_line input as ref. """
+        self.resname = None
+        self.resid = None
+
+    def clear(self):
+        """ Clear the ref, which we do ie. to start a new residue. """
+        self.resname = None
+        self.resid = None
+
+    def __call__(self, pdb_line):
+        if not pdb_line.is_atom:
+            return False
+        if self.resid != pdb_line['resid'] or self.resid != pdb_line['resid']:
+            self.resname = pdb_line['resname']
+            self.resid = pdb_line['resid']
+            return True
+        return False
+
 def section_into_chains(pdb_lines, residues_per_chain):
     """ Define a given number of residues into a chain. Chains are identified
-    by upper case letters in alphabetical order. fixes the residue numbering
+    by upper case letters in alphabetical order. Does not change residue numbering.
     Arguments
         residues_per_chain (list of ints or int): Number of residues per chain.
         If int, all chains get the same number of residues
         If list, runs through the list and assigns a chain for each integer in
         the list with that number of residues.
     """
-    temp_lines = fix_residue_numbering(pdb_lines)
-    n_residues = int(PDBLINE.from_line(temp_lines[-1])['resid'])
+    # we count the number of residues by iterating through all lines
+    # where a new residue starts when either the resid or the resname changes
+    is_new_residue = IsNewResidue()
+    n_residues = int(sum([is_new_residue(PDBLINE.from_line(line)) for line in pdb_lines]))
+    is_new_residue.clear()
+    # set up residues per chain
     if isinstance(residues_per_chain, int):
         assert n_residues % residues_per_chain == 0, (
             'The number of residues per chain is an integer, so every chain should '
@@ -93,13 +163,22 @@ def section_into_chains(pdb_lines, residues_per_chain):
         )
     else:
         raise TypeError('Type of residues_per_chain needs to be int or list of ints')
-
+    # now do the actual sectioning into chains
     output_lines = []
     chain_counter = 0
-    for line in temp_lines:
+    res_counter = 0
+    for line in pdb_lines:
         line_obj = PDBLINE.from_line(line)
-        if int(line_obj['resid']) > sum(residues_per_chain[ : chain_counter + 1]):
-            chain_counter += 1
-        line_obj['chainid'] = string.ascii_uppercase[chain_counter]
-        output_lines.append(line_obj.get_line())
+        # erase counter in TER lines
+        if line.startswith('TER'):
+            output_lines.append('TER \n')
+        # leave other non ATOM HEATATM lines unchanged
+        elif not line_obj.is_atom:
+            output_lines.append(line)
+        else:
+            res_counter += is_new_residue(line_obj)
+            if int(res_counter) > sum(residues_per_chain[ : chain_counter + 1]):
+                chain_counter += 1
+            line_obj['chainid'] = string.ascii_uppercase[chain_counter]
+            output_lines.append(line_obj.get_line())
     return output_lines
