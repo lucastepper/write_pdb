@@ -127,15 +127,18 @@ class IsNewResidue():
             return True
         return False
 
-def section_into_chains(pdb_lines, residues_per_chain):
+def section_into_chains(pdb_lines, residues_per_chain, chain_names=string.ascii_uppercase):
     """ Define a given number of residues into a chain. Chains are identified
     by upper case letters in alphabetical order. Does not change residue numbering.
     Checks that a 'TER' line is inserted after a chain finishes.
     Arguments
         residues_per_chain (list of ints or int): Number of residues per chain.
-        If int, all chains get the same number of residues
-        If list, runs through the list and assigns a chain for each integer in
-        the list with that number of residues.
+            If int, all chains get the same number of residues
+            If list, runs through the list and assigns a chain for each
+            integer in the list with that number of residues.
+        chain_names (list of str): List of chain names to be used. Must be at least
+            as long as the number of chains that are defined by n_lines / residues_per_chain.
+            default: string.ascii_uppercase
     """
     # we count the number of residues by iterating through all lines
     # where a new residue starts when either the resid or the resname changes
@@ -184,6 +187,6 @@ def section_into_chains(pdb_lines, residues_per_chain):
                 # check if the next line is a "TER" line, if not, add one
                 if not "TER" in pdb_lines[i + 1]:
                     output_lines.append("TER \n")
-            line_obj['chainid'] = string.ascii_uppercase[chain_counter]
+            line_obj['chainid'] = chain_names[chain_counter]
             output_lines.append(line_obj.get_line())
     return output_lines
