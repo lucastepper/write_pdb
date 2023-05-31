@@ -143,7 +143,10 @@ def section_into_chains(pdb_lines, residues_per_chain, chain_names=string.ascii_
     # we count the number of residues by iterating through all lines
     # where a new residue starts when either the resid or the resname changes
     is_new_residue = IsNewResidue()
-    n_residues = int(sum([is_new_residue(PDBLINE.from_line(line)) for line in pdb_lines]))
+    n_residues = int(sum(is_new_residue(PDBLINE.from_line(line)) for line in pdb_lines))
+    print(f"Input {residues_per_chain=}, computed {n_residues=}")
+    if n_residues > len(chain_names):
+        raise ValueError("We have more residues than chain names, please provide more chain names")
     is_new_residue.clear()
     # set up residues per chain
     if isinstance(residues_per_chain, int):
