@@ -1,5 +1,6 @@
 import os
 import argparse
+from typing import Optional
 import write_pdb
 
 
@@ -10,6 +11,12 @@ def main():
     )
     parser.add_argument("--file", "-f", help="load name")
     parser.add_argument("--save", "-s", help="save name")
+    parser.add_argument(
+        "--kick",
+        type=str,
+        default=None,
+        help="Kick lines that match this string.",
+    )
     parser.add_argument(
         "--fix_atom_numbering",
         "-a",
@@ -39,6 +46,8 @@ def main():
         args.save = args.file
     with open(args.file, "r", encoding="utf-8") as fh:
         lines = fh.readlines()
+    if args.kick:
+        lines = [line for line in lines if args.kick not in line]
     if args.fix_atom_numbering:
         lines = write_pdb.fix_atom_numbering(lines)
     if args.fix_resiude_numbering:
