@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class PDBLINE(dict):
     """
     Create a single PDB line and write its fields.
@@ -88,6 +91,13 @@ class PDBLINE(dict):
                 word = self.get_str_with_len(super().__getitem__(key), colums[1] - colums[0])
                 self.sub_line(colums[0], colums[1], word, line)
         return ''.join(line) + pad_with
+
+    def set_positions(self, pos: np.ndarray):
+        """ Set the position of the atom. """
+        # I actually do not know what the pdb standart does with positions > 100
+        self["posx"] = round(pos[0], 3)
+        self["posy"] = round(pos[1], 3)
+        self["posz"] = round(pos[2], 3)
 
     def __repr__(self):
         return self.get_line().strip('\n')
