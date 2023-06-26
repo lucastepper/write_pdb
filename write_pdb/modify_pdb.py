@@ -64,11 +64,21 @@ def fix_residue_numbering(pdb_lines, restart_resid_per_chain=False):
     resname_cache = None
     is_new_chain = IsNewChain()
     is_new_chain(PDBLINE.from_line(pdb_lines[0]))
+    found_ca = False
     for line in pdb_lines:
         line_obj = PDBLINE.from_line(line)
         # ignore REMARK TER and other such lines
         if not line_obj.is_atom:
             continue
+        print(line_obj["atomname"].strip(), line_obj["atomname"].strip() == "CA")
+        if line_obj["atomname"].strip() == "CA":
+            if found_ca:
+                raise ValueError(
+                    "Multiple CA atoms found in residue, probably due to "
+                    "Two residues with the same resname next to each other. "
+                    "Please fix this manually. "
+                    )
+            found_ca = True
         # set cache the first time a line belonging to residue is encountered
         if resname_cache is None:
             resname_cache = PDBLINE.from_line(line)["resname"]
@@ -79,6 +89,7 @@ def fix_residue_numbering(pdb_lines, restart_resid_per_chain=False):
             else:
                 res_counter += 1
             resname_cache = line_obj["resname"]
+            found_ca = False
         line_obj["resid"] = res_counter
         output_lines.append(line_obj.get_line())
     return output_lines
